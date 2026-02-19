@@ -1,0 +1,7 @@
+work/
+results/
+references/
+.nextflow/
+.nextflow.log*
+.conda_cache/
+data/
