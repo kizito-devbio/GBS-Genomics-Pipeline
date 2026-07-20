@@ -1,12 +1,19 @@
+/*
+ * Taxonomic Confirmation — BLASTn against Streptococcus reference database.
+ *
+ * Input:  genome FASTA, BLAST database directory
+ * Output: taxonomy assignment text file, BLAST results, log
+ */
+
 process TAXONOMY {
     tag "$sample"
     label 'low_compute'
 
-    conda 'bioconda::blast'
+    conda 'bioconda::blast=2.15.0'
     container 'kizitodevbio/strepto-pipeline:latest'
 
-    publishDir "${params.outdir}/taxonomy", mode: 'copy'
-    publishDir "${params.outdir}/logs", mode: 'copy', pattern: '*_taxonomy.log'
+    publishDir "${params.outdir}/Annotation", mode: 'copy', pattern: "${sample}_taxonomy.txt"
+    publishDir "${params.outdir}/Logs", mode: 'copy', pattern: "${sample}_taxonomy.log"
 
     input:
     tuple val(sample), path(genome)
@@ -21,16 +28,26 @@ process TAXONOMY {
     #!/usr/bin/env bash
     set -euo pipefail
 
-    DATE=$(date +"%Y-%m-%d %H:%M:%S")
     LOG="!{sample}_taxonomy.log"
+    START=$(date +%s)
+    DATE=$(date +"%Y-%m-%d %H:%M:%S")
 
-    echo "[$DATE] Processing sample: !{sample}" > "$LOG"
+    {
+        echo "========================================"
+        echo "Stage:       Taxonomic Confirmation"
+        echo "Sample:      !{sample}"
+        echo "Started:     $DATE"
+        echo "Input:       !{genome}"
+        echo "Output dir:  !{params.outdir}/Annotation"
+        echo "Software:    BLAST+ $(blastn -version 2>&1 | head -1)"
+        echo "Parameters:  perc_identity=95, max_hsps=1"
+        echo "----------------------------------------"
+    } > "$LOG"
 
-    # Define path to BLAST DB index
     DB_INDEX="!{blast_db_folder}/strep_db"
 
     if [ ! -f "${DB_INDEX}.nhr" ]; then
-        echo "[$DATE] ERROR: BLAST index 'strep_db' not found in !{blast_db_folder}" >> "$LOG"
+        echo "ERROR: BLAST index not found at ${DB_INDEX}" >> "$LOG"
         exit 1
     fi
 
@@ -44,18 +61,21 @@ process TAXONOMY {
         -out "!{sample}_blast_raw.tsv" >> "$LOG" 2>&1
 
     if [ -s "!{sample}_blast_raw.tsv" ]; then
-        # Parse species name from the 13th column (stitle) or use 2nd (sseqid)
-        SPECIES_NAME=$(sort -k12,12rn "!{sample}_blast_raw.tsv" | awk -F'\t' 'NR==1 { 
-            if ($13 == "" || $13 == "N/A") 
-                print $2; 
-            else 
-                print $13 
+        SPECIES_NAME=$(sort -k12,12rn "!{sample}_blast_raw.tsv" | awk -F'\t' 'NR==1 {
+            if ($13 == "" || $13 == "N/A") print $2; else print $13
         }')
         echo "$SPECIES_NAME" > "!{sample}_taxonomy.txt"
-        echo "[$DATE] Taxonomy identified for !{sample}: $SPECIES_NAME" >> "$LOG"
+        echo "Taxonomy:    $SPECIES_NAME" >> "$LOG"
     else
         echo "Unknown Streptococcus" > "!{sample}_taxonomy.txt"
-        echo "[$DATE] WARNING: No hits found for !{sample} above 95% identity" >> "$LOG"
+        echo "WARNING: No BLAST hits above 95% identity" >> "$LOG"
     fi
+
+    ELAPSED=$(( $(date +%s) - START ))
+    echo "----------------------------------------" >> "$LOG"
+    echo "Completed:   $(date +"%Y-%m-%d %H:%M:%S")" >> "$LOG"
+    echo "Elapsed:     ${ELAPSED}s" >> "$LOG"
+    echo "Status:      SUCCESS" >> "$LOG"
+    echo "========================================" >> "$LOG"
     '''
 }

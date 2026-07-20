@@ -1,224 +1,229 @@
-GBS-Genomics-Pipeline: User Manual and Complete Guide
+# GBS-Genomics-Pipeline
 
-GBS-Genomics-Pipeline is an open-source, modular, and containerized workflow for whole genome analysis of Streptococcus agalactiae (Group B Streptococcus).
-It is built with Nextflow and designed to run on laptops, workstations, servers, and HPC clusters using Docker, Singularity, or Conda.
+[![Nextflow](https://img.shields.io/badge/Nextflow-DSL2-blue)](https://www.nextflow.io/)
+[![Docker](https://img.shields.io/badge/Docker-kizitodevbio%2Fstrepto--pipeline-blue)](https://hub.docker.com/r/kizitodevbio/strepto-pipeline)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-The pipeline automates the full genomic workflow from raw sequencing reads or curated genome assemblies to phylogenetic tree construction and integrated visualization.
+An open-source, reproducible Nextflow DSL2 workflow for whole-genome analysis of **Streptococcus agalactiae** (Group B Streptococcus, GBS).
 
-1. What This Pipeline Does
-This workflow performs complete bacterial genome analysis in an automated and reproducible way.
-It performs:
+## Overview
 
-• Quality control of raw reads
-• Removal of human contamination
-• Genome assembly
-• Assembly quality assessment
-• Taxonomic confirmation
-• Background genome selection
-• Functional annotation
-• Virulence factor detection
-• MLST typing
-• Core genome analysis
-• Phylogenetic tree reconstruction
-• Integrated AMR and virulence visualization
+GBS-Genomics-Pipeline automates bacterial genomics from raw sequencing reads or pre-assembled genomes through annotation, antimicrobial resistance (AMR) detection, virulence profiling, MLST typing, core genome phylogeny, and publication-quality visualization.
 
-The workflow has two input pathways:
-Curated Pathway
-For assembled genome FASTA files (.fa, .fna, .fasta)
+Designed for researchers, clinicians, and bioinformaticians worldwide — runs on laptops, workstations, HPC clusters, and cloud environments via Docker, Singularity, or Conda.
 
-Raw Pathway
-For paired-end FASTQ files (_1.fastq and _2.fastq)
-Note: The raw read pathway is currently under scientific validation and optimization.
+### Scientific Background
 
-2. Why This Pipeline Uses Containers
-Bioinformatics tools are difficult to install and often conflict with each other.
-This pipeline is fully containerized using the Docker image:
-kizitodevbio/strepto-pipeline:latest
+Group B Streptococcus is a leading cause of neonatal sepsis and meningitis. Whole-genome sequencing enables surveillance of AMR, virulence factors, and clonal spread. This pipeline integrates established open-source tools (Prokka, Abricate, MLST, Panaroo, IQ-TREE) into a single reproducible workflow.
 
-This means:
+## Workflow
 
-• No manual installation of SPAdes, Prokka, BLAST, etc.
-• Identical results on any system
-• Clean and reproducible execution
+```mermaid
+flowchart TD
+    A[Input] --> B{Input type?}
+    B -->|Raw FASTQ| C[QC — fastp]
+    C --> D[Assembly — SPAdes]
+    D --> E[Quality Assessment — QUAST]
+    B -->|Curated FASTA| F[Genomes]
+    E --> F
+    F --> G[Taxonomy — BLAST]
+    G --> H[Background Selection]
+    F --> I[Annotation — Prokka]
+    I --> J[AMR — Abricate/CARD]
+    I --> K[Virulence — Abricate/VFDB]
+    I --> L[MLST]
+    I --> M[Core Genome — Panaroo]
+    M --> N[Phylogeny — IQ-TREE]
+    J --> O[Visualization]
+    K --> O
+    L --> O
+    N --> O
+    O --> P[Figures & Reports]
+```
 
-3. What You Need Before Running
+> **Note:** Human genome decontamination was removed from the active workflow. Frozen modules are preserved in `modules/frozen/` for reference.
 
-You must install:
+## Quick Start
 
-Nextflow (workflow manager)
+### Prerequisites
 
-One of the following:
-Docker (recommended)
-Singularity (for HPC systems)
-Conda (alternative method)
+- [Nextflow](https://www.nextflow.io/) ≥ 22.10
+- One of: [Docker](https://docs.docker.com/get-docker/), [Singularity/Apptainer](https://apptainer.org/), or [Conda/Mamba](https://docs.conda.io/)
 
-You only need ONE container system.
+### Installation
 
-4. Install Nextflow
-
-Run this on Linux or macOS:
-curl -s https://get.nextflow.io | bash
-chmod +x nextflow
-sudo mv nextflow /usr/local/bin/
-
-
-Check installation:
-nextflow -version
-
-5. Install Docker (Recommended)
-Ubuntu:
-sudo apt-get update
-sudo apt-get install docker.io
-sudo systemctl start docker
-sudo systemctl enable docker
-
-
-Verify Docker:
-docker --version
-
-Add your user to Docker group (so you do not need sudo):
-sudo usermod -aG docker $USER
-
-Then log out and log back in.
-
-6. Pull the Docker Image Manually (Optional but Recommended)
-You can manually download the container image:
-docker pull kizitodevbio/strepto-pipeline:latest
-
-If you use Singularity:
-singularity pull docker://kizitodevbio/strepto-pipeline:latest
-
-Nextflow will automatically pull the image if it is not already present.
-
-7. Download the Pipeline
-Move to the directory where you want to keep the project:
-cd ~/Desktop
-
-Clone the repository:
+```bash
 git clone https://github.com/kizito-devbio/GBS-Genomics-Pipeline.git
-
-
-Enter the folder:
 cd GBS-Genomics-Pipeline
+```
 
-You are now inside the pipeline directory.
-8. Preparing Your Data
-You must organize your data before running.
+Pull the container (optional — Nextflow pulls automatically):
 
-For curated genomes:
-Create a folder:
-mkdir curated_data
+```bash
+docker pull kizitodevbio/strepto-pipeline:latest
+```
 
-Place your FASTA files inside:
-example:
-sample1.fasta
-sample2.fna
+### Run with curated genomes
 
-For raw reads:
-Create a folder:
-mkdir raw_data
+```bash
+nextflow run pipeline.nf \
+  -profile docker \
+  --curated_dir /path/to/fastas \
+  --outdir results
+```
 
-Files must follow this naming format:
-sample1_1.fastq
-sample1_2.fastq
+### Run with raw reads
 
-Paired-end naming is required.
+```bash
+nextflow run pipeline.nf \
+  -profile docker \
+  --raw_dir /path/to/fastq \
+  --outdir results
+```
 
-9. Running the Pipeline
+### Resume an interrupted run
 
-You must always run the command from inside the GBS-Genomics-Pipeline folder.
+```bash
+nextflow run pipeline.nf -profile docker --curated_dir data/ --outdir results -resume
+```
 
-The parameters:
---curated_dir
-or
---raw_dir
+## Input Formats
 
-are simply names that tell the pipeline which pathway to use. They point to your folder.
+| Pathway | Format | Naming convention |
+|---------|--------|-------------------|
+| Curated | FASTA (`.fa`, `.fna`, `.fasta`) | Any basename, e.g. `sample1.fasta` |
+| Raw | Paired-end FASTQ | `sample_1.fastq` + `sample_2.fastq` |
 
-Option A: Run with Docker (Recommended)
-Curated genome pathway:
-nextflow run pipeline.nf -profile docker --curated_dir curated_data --outdir results
+## Output Structure
 
+```
+results/
+├── QC/                  # Trimmed reads, FastQC reports (raw pathway)
+├── Assembly/            # Assembled contigs, QUAST reports
+├── Annotation/          # Prokka outputs per sample
+├── AMR/                 # Abricate CARD results (*_amr.tsv)
+├── Virulence/           # Abricate VFDB results (*_vf.tsv)
+├── MLST/                # MLST assignments (*_mlst.tsv)
+├── CoreGenome/          # Panaroo pangenome results
+├── Phylogeny/           # IQ-TREE Newick tree (gbs_phylogeny_tree.nwk)
+├── Figures/             # Publication figures (PNG, SVG, PDF)
+├── Reports/             # Summary reports, skip explanations
+└── Logs/                # Per-process logs, timeline, DAG, trace
+```
 
-Raw reads pathway:
-nextflow run pipeline.nf -profile docker --raw_dir raw_data --outdir results
+## Visualization
 
-Option B: Run with Singularity (HPC environments)
-Curated genome pathway:
-nextflow run pipeline.nf -profile singularity --curated_dir curated_data --outdir results
+The final workflow stage generates figures exclusively from validated pipeline outputs:
 
-Raw reads pathway:
-nextflow run pipeline.nf -profile singularity --raw_dir raw_data --outdir results
+| Figure | Source data |
+|--------|-------------|
+| AMR heatmap | `AMR/*_amr.tsv` |
+| Virulence heatmap | `Virulence/*_vf.tsv` |
+| Combined AMR + Virulence heatmap | Both |
+| AMR / Virulence frequency | Gene presence matrices |
+| MLST distribution | `MLST/*_mlst.tsv` |
+| Co-occurrence matrices | Gene presence matrices |
+| Annotated phylogenetic trees | Tree + AMR/VF/MLST |
+| Sample summary dashboard | All sources |
 
-Option C: Run with Conda(Recommended)
-Conda builds the environment locally.
+If required data are unavailable, a `Reports/<figure>_SKIPPED.txt` file explains why — no placeholder data is generated.
 
-Curated genome pathway:
-nextflow run pipeline.nf -profile conda --curated_dir curated_data --outdir results
+## Parameters
 
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `--curated_dir` | — | Path to assembled FASTA files |
+| `--raw_dir` | — | Path to paired FASTQ files |
+| `--outdir` | `./results` | Output directory |
+| `--mlst_scheme` | `sagalactiae` | PubMLST scheme |
+| `--min_n50` | `10000` | Minimum N50 for assembly pass filter |
+| `--max_cpus` | auto | Maximum CPU cores |
+| `--max_memory` | `6 GB` | Maximum memory |
+| `--help` | — | Print parameter reference |
 
-Raw reads pathway:
-nextflow run pipeline.nf -profile conda --raw_dir raw_data --outdir results
+See [docs/PARAMETERS.md](docs/PARAMETERS.md) for the complete parameter reference.
 
-10. Resume an Interrupted Run
-If your system shuts down or the job stops: by adding -resume as seen in the example below
-nextflow run pipeline.nf -profile docker --curated_dir curated_data --outdir results -resume
+## Profiles
 
-Nextflow will continue from the last successful step.
+| Profile | Description |
+|---------|-------------|
+| `docker` | Docker container execution (recommended) |
+| `singularity` | Singularity/Apptainer on HPC |
+| `conda` | Local Conda environment per process |
+| `cluster` | SLURM cluster submission |
+| `test` | Reduced resources for testing |
 
+## Software Requirements
 
-12. Output Structure
+| Tool | Version | Purpose |
+|------|---------|---------|
+| fastp | apt | Read trimming |
+| SPAdes | 4.2.0 | Genome assembly |
+| QUAST | pip | Assembly QC |
+| Prokka | 1.14.6 | Gene annotation |
+| Abricate | latest | AMR & virulence |
+| MLST | 2.x | Sequence typing |
+| Panaroo | 1.5.0 | Core genome |
+| IQ-TREE | 2.x | Phylogeny |
+| ete3 | 3.1.3 | Tree visualization |
+| BLAST+ | 2.15 | Taxonomy |
 
-After completion, the results folder contains:
+Full list in [docker/Dockerfile](docker/Dockerfile).
 
-Annotation: move into the fuctional annotation
-fuctional annotation and AMR files
+## Troubleshooting
 
-Virulence: move into virulence
-Virulence factor reports
+| Issue | Solution |
+|-------|----------|
+| `Provide --raw_dir or --curated_dir` | Specify exactly one input pathway |
+| Core genome fails with 1 sample | Phylogeny requires ≥2 samples; pipeline skips gracefully |
+| Docker permission denied | Add user to docker group or use `sudo` |
+| Conda env build slow | First run downloads packages; subsequent runs use cache |
+| Empty AMR/VF results | Check Abricate database setup: `abricate --setupdb` |
+| Resume not working | Ensure same `--outdir` and work directory |
 
-MLST: move into mlst
-Sequence typing results
+## Performance Tips
 
-Core Genome: move into core gemone
-Alignment files
+- Use `-profile docker` for fastest setup on workstations
+- Set `--max_cpus` and `--max_memory` for your hardware
+- Use `-resume` to avoid re-running completed steps
+- Pre-assembled genomes (`--curated_dir`) skip QC/assembly and run faster
+- HPC users: `-profile cluster` with `-profile singularity`
 
-Phylogeny: move into phylogeny
-Newick tree files
+## Known Limitations
 
-Logs
-Execution timeline
-Performance report
-Workflow DAG graph
+- Core genome and phylogeny require ≥2 samples
+- MLST clonal complex assignment depends on PubMLST scheme coverage
+- Raw-read pathway quality depends on input sequencing depth
+- Abricate databases (CARD, VFDB) must be set up in the container/environment
+- Human decontamination is not performed (see `modules/frozen/`)
 
-Reports are automatically generated in:
+## Citation
 
-results/logs/
+If you use this pipeline, please cite:
 
-12. System Resource Configuration
-The pipeline automatically detects available CPUs and assigns resources safely.
+```bibtex
+@software{gbs_genomics_pipeline,
+  title   = {GBS-Genomics-Pipeline: Streptococcus agalactiae Whole-Genome Analysis},
+  author  = {DevBio, Kizito},
+  year    = {2026},
+  url     = {https://github.com/kizito-devbio/GBS-Genomics-Pipeline}
+}
+```
 
-Default behavior:
+See [CITATION.cff](CITATION.cff) for machine-readable citation metadata.
 
-• Uses available CPUs minus one
-• Uses up to 6 GB RAM unless modified
+## License
 
-For cluster systems (SLURM), use:
+MIT License — see [LICENSE](LICENSE).
 
-nextflow run pipeline.nf -profile cluster --curated_dir curated_data --outdir results
+## Contributing
 
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
-You can adjust memory and CPU in the configuration file if needed.
+## Changelog
 
-13. Important Notes
+See [CHANGELOG.md](CHANGELOG.md).
 
-• Raw read pathway is still under validation
-• FASTQ files must be paired-end
-• FASTA files must be properly formatted
-• Always run from inside the project directory
-• Docker abd conda is strongly recommended for reproducibility
+## Acknowledgements
 
-14. Contact
-For issues, suggestions, or collaboration:
-
-Email: kizitosylvester@gmail.com
+Built with [Nextflow](https://www.nextflow.io/), [nf-core](https://nf-co.re/) conventions, and the open-source bioinformatics community. Key tools by Seemann (Prokka, Abricate, MLST), Tonkin-Hill (Panaroo), and Minh (IQ-TREE).

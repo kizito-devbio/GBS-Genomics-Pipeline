@@ -1,47 +1,67 @@
+/*
+ * Background Genome Selection — collects sample genomes and reference for context.
+ *
+ * Input:  collected genome FASTA files
+ * Output: background genome collection, step log
+ */
+
 process BACKGROUND_SELECTION {
     tag "background_selection"
     label 'med_compute'
 
-    // Fix: wget is in conda-forge, not bioconda
     conda 'conda-forge::wget=1.21.4'
     container 'kizitodevbio/strepto-pipeline:latest'
 
-    publishDir "${params.outdir}/background", mode: 'copy'
-    publishDir "${params.outdir}/logs", mode: 'copy', pattern: 'step_log.txt'
+    publishDir "${params.outdir}/Reports", mode: 'copy', pattern: "background_genomes/**"
+    publishDir "${params.outdir}/Logs", mode: 'copy', pattern: "background_selection_log.txt"
 
     input:
     path genomes
 
     output:
     path "background_genomes/*.fna", emit: background_fasta
-    path "step_log.txt", emit: log
+    path "background_selection_log.txt", emit: log
 
     script:
     """
     #!/usr/bin/env bash
     set -euo pipefail
 
-    TIMESTAMP=\$(date "+%Y-%m-%d %H:%M:%S")
-    echo "[\$TIMESTAMP] Step: Preparing Streptococcus background" > step_log.txt
+    LOG="background_selection_log.txt"
+    START=\$(date +%s)
+    TS=\$(date +"%Y-%m-%d %H:%M:%S")
+
+    {
+        echo "========================================"
+        echo "Stage:       Background Genome Selection"
+        echo "Started:     \$TS"
+        echo "Input:       ${genomes.size()} genome file(s)"
+        echo "Output dir:  ${params.outdir}/Reports"
+        echo "Reference:   ${params.background_ref_url}"
+        echo "----------------------------------------"
+    } > "\$LOG"
 
     mkdir -p background_genomes
 
-    # Copy all input genomes
-    echo "[\$TIMESTAMP] Adding sample genomes" >> step_log.txt
     for genome_file in ${genomes}; do
         cp "\$genome_file" background_genomes/\$(basename "\$genome_file")
+        echo "Added:       \$(basename "\$genome_file")" >> "\$LOG"
     done
 
-    # Download reference genome only if not already present
     REF_GENOME="background_genomes/S_agalactiae_ref.fna"
     if [ ! -f "\$REF_GENOME" ]; then
-        echo "[\$TIMESTAMP] Downloading Streptococcus reference genome" >> step_log.txt
+        echo "Downloading reference genome..." >> "\$LOG"
         wget -q "${params.background_ref_url}" -O "\$REF_GENOME.gz"
         gunzip -f "\$REF_GENOME.gz"
     else
-        echo "[\$TIMESTAMP] Reference genome already present" >> step_log.txt
+        echo "Reference genome already present." >> "\$LOG"
     fi
 
-    echo "[\$TIMESTAMP] Background genome preparation completed" >> step_log.txt
+    ELAPSED=\$(( \$(date +%s) - START ))
+    echo "----------------------------------------" >> "\$LOG"
+    echo "Completed:   \$(date +"%Y-%m-%d %H:%M:%S")" >> "\$LOG"
+    echo "Elapsed:     \${ELAPSED}s" >> "\$LOG"
+    echo "Status:      SUCCESS" >> "\$LOG"
+    echo "========================================" >> "\$LOG"
     """
 }

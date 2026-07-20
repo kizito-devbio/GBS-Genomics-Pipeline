@@ -1,19 +1,24 @@
+/*
+ * Virulence Factor Detection — Abricate screening against VFDB.
+ *
+ * Input:  annotated genome FASTA (Prokka .fna)
+ * Output: virulence factor TSV, log
+ */
+
 process VIRULENCE_FACTOR {
     tag { sample }
     label 'low_compute'
 
-    // Open Source Compatibility: Pins version to match functional annotation
     conda 'bioconda::abricate=1.0.1'
     container 'kizitodevbio/strepto-pipeline:latest'
 
-    // Results go into a dedicated virulence folder
-    publishDir "${params.outdir}/virulence/${sample}", mode: 'copy'
+    publishDir "${params.outdir}/Virulence", mode: 'copy', pattern: "${sample}_vf.tsv"
+    publishDir "${params.outdir}/Logs", mode: 'copy', pattern: "${sample}_virulence.log"
 
     input:
     tuple val(sample), path(fasta_file)
 
     output:
-    // Organized output tuple
     tuple val(sample), path("${sample}_vf.tsv"), emit: results
     path "${sample}_virulence.log", emit: log
 
@@ -21,31 +26,42 @@ process VIRULENCE_FACTOR {
     """
     #!/usr/bin/env bash
     set -euo pipefail
-    
-    # Standardize locale to avoid grep/sort issues
     export LC_ALL=C
     export LANG=C
 
     LOG="${sample}_virulence.log"
-    TIMESTAMP=\$(date +"%Y-%m-%d %H:%M:%S")
-    echo "[\$TIMESTAMP] Virulence factor detection for ${sample}" > "\$LOG"
+    START=\$(date +%s)
+    TS=\$(date +"%Y-%m-%d %H:%M:%S")
 
-    # Run ABRicate using the VFDB (Virulence Factor Database)
-    echo "[\$TIMESTAMP] Running ABRicate with vfdb..." >> "\$LOG"
-    abricate --db vfdb "$fasta_file" > "${sample}_vf.tsv" 2>> "\$LOG" || {
-        echo "[\$TIMESTAMP] WARNING: ABRicate failed, creating empty VF file" >> "\$LOG"
-        # Ensure header exists even if tool fails
+    {
+        echo "========================================"
+        echo "Stage:       Virulence Factor Detection"
+        echo "Sample:      ${sample}"
+        echo "Started:     \$TS"
+        echo "Input:       ${fasta_file}"
+        echo "Output dir:  ${params.outdir}/Virulence"
+        echo "Software:    Abricate \$(abricate --version 2>&1 | head -1)"
+        echo "Parameters:  database=vfdb"
+        echo "----------------------------------------"
+    } > "\$LOG"
+
+    abricate --db vfdb "${fasta_file}" > "${sample}_vf.tsv" 2>> "\$LOG" || {
+        echo "WARNING: Abricate returned non-zero exit code" >> "\$LOG"
         echo "#FILE\\tSEQUENCE\\tSTART\\tEND\\tGENE\\tCOVERAGE\\tCOVERAGE_MAP\\tGAPS\\t%COVERAGE\\t%IDENTITY\\tDATABASE\\tACCESSION\\tPRODUCT\\tRESISTANCE" > "${sample}_vf.tsv"
     }
 
-    # Ensure the file is not empty/has a header
     if [ ! -s "${sample}_vf.tsv" ]; then
-        echo "[\$TIMESTAMP] WARNING: ABRicate produced empty file" >> "\$LOG"
-        touch "${sample}_vf.tsv"
+        echo "# No virulence factors detected" > "${sample}_vf.tsv"
     fi
 
-    # Count detected virulence factors (excluding header)
-    NUM_VF=\$(grep -v "FILE" "${sample}_vf.tsv" | wc -l || echo 0)
-    echo "[\$TIMESTAMP] Virulence factors detected: \$NUM_VF" >> "\$LOG"
+    NUM_VF=\$(grep -vc "^#" "${sample}_vf.tsv" 2>/dev/null || echo 0)
+    echo "VF detected: \$NUM_VF" >> "\$LOG"
+
+    ELAPSED=\$(( \$(date +%s) - START ))
+    echo "----------------------------------------" >> "\$LOG"
+    echo "Completed:   \$(date +"%Y-%m-%d %H:%M:%S")" >> "\$LOG"
+    echo "Elapsed:     \${ELAPSED}s" >> "\$LOG"
+    echo "Status:      SUCCESS" >> "\$LOG"
+    echo "========================================" >> "\$LOG"
     """
 }

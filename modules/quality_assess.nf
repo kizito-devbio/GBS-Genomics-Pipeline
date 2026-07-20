@@ -1,31 +1,62 @@
+/*
+ * Assembly Quality Assessment — QUAST metrics for assembled genomes.
+ *
+ * Input:  assembled FASTA
+ * Output: QUAST report TSV, N50/total/contig metrics, step log
+ */
+
 process QUALITY_ASSESS {
     tag "$sample"
     label 'med_compute'
-    publishDir "${params.outdir}/quality_assess", mode: 'copy'
-    publishDir "${params.outdir}/logs", mode: 'copy', pattern: 'step_log.txt'
+
+    publishDir "${params.outdir}/Assembly", mode: 'copy', pattern: "${sample}_quast_report.tsv"
+    publishDir "${params.outdir}/Logs", mode: 'copy', pattern: "${sample}_qa_log.txt"
 
     input:
     tuple val(sample), path(assembly)
 
     output:
-    // We emit the tuple. Note: we read the values from files created in the script
     tuple val(sample), path(assembly), path("n50.txt"), path("total_len.txt"), path("contigs.txt"), emit: metrics
     path "${sample}_quast_report.tsv", emit: report
-    path "step_log.txt",               emit: log
+    path "${sample}_qa_log.txt", emit: log
 
     script:
     """
-    timestamp=\$(date +"%Y-%m-%d %H:%M:%S")
-    echo "[\$timestamp] Step: Assembly Quality Assessment for sample ${sample}." > step_log.txt
-    
-    quast.py $assembly -o quast_out --min-contig 500 --no-plots --no-html || { echo "QUAST failed"; exit 1; }
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    LOG="${sample}_qa_log.txt"
+    START=\$(date +%s)
+    TS=\$(date +"%Y-%m-%d %H:%M:%S")
+
+    {
+        echo "========================================"
+        echo "Stage:       Assembly Quality Assessment"
+        echo "Sample:      ${sample}"
+        echo "Started:     \$TS"
+        echo "Input:       ${assembly}"
+        echo "Output dir:  ${params.outdir}/Assembly"
+        echo "Software:    QUAST \$(quast.py --version 2>&1 | head -1)"
+        echo "Parameters:  min-contig=500"
+        echo "----------------------------------------"
+    } > "\$LOG"
+
+    quast.py ${assembly} -o quast_out --min-contig 500 --no-plots --no-html >> "\$LOG" 2>&1
     cp quast_out/report.tsv ${sample}_quast_report.tsv
-    
-    # Extract values and save to files so Nextflow can grab them as 'path' outputs
+
     grep '^N50' ${sample}_quast_report.tsv | cut -f2 > n50.txt
     grep '^Total length' ${sample}_quast_report.tsv | cut -f2 > total_len.txt
     grep '^# contigs' ${sample}_quast_report.tsv | cut -f2 > contigs.txt
-    
-    echo "[\$timestamp] Assessment complete." >> step_log.txt
+
+    echo "N50:         \$(cat n50.txt)" >> "\$LOG"
+    echo "Total len:   \$(cat total_len.txt)" >> "\$LOG"
+    echo "Contigs:     \$(cat contigs.txt)" >> "\$LOG"
+
+    ELAPSED=\$(( \$(date +%s) - START ))
+    echo "----------------------------------------" >> "\$LOG"
+    echo "Completed:   \$(date +"%Y-%m-%d %H:%M:%S")" >> "\$LOG"
+    echo "Elapsed:     \${ELAPSED}s" >> "\$LOG"
+    echo "Status:      SUCCESS" >> "\$LOG"
+    echo "========================================" >> "\$LOG"
     """
 }

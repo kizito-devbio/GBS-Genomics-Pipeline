@@ -286,21 +286,45 @@ RUN set -ex && \
 
 
 # -----------------------------
-# 20. Final Verification & Victory Message (FIXED)
+# 20. Panaroo — pangenome / core genome (pinned)
+# -----------------------------
+RUN pip install --no-cache-dir panaroo==1.5.0
+
+# -----------------------------
+# 21. ete3 — phylogenetic tree visualization (pinned)
+# -----------------------------
+RUN pip install --no-cache-dir ete3==3.1.3
+
+# -----------------------------
+# 22. seqkit — FASTA/FASTQ sequence toolkit (pinned binary)
+# -----------------------------
+RUN wget -q "https://github.com/shenwei356/seqkit/releases/download/v2.8.2/seqkit_linux_amd64.tar.gz" -O /tmp/seqkit.tar.gz && \
+    tar -xzf /tmp/seqkit.tar.gz -C /usr/local/bin/ seqkit && \
+    chmod +x /usr/local/bin/seqkit && \
+    rm /tmp/seqkit.tar.gz
+
+# -----------------------------
+# 23. IQ-TREE 2 — phylogenetic inference (apt, pinned)
+# -----------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends iqtree && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# -----------------------------
+# 24. Final Verification
 # -----------------------------
 RUN set -e && \
-    echo "=== STREPTOCOCCUS AGALACTIAE PIPELINE - FINAL CHECK (ISSAD 2026) ===" && \
+    echo "=== GBS-Genomics-Pipeline — Dependency Verification ===" && \
     spades.py --version && \
     unicycler --version && \
     prokka --version && \
     mlst --version && \
-    # Using the path-safe way to call kaptive
     kaptive --help | head -n 1 && \
-    # Roary uses -w for version or just help
     roary -w && \
     snippy --version && \
-    abricate --db vfdb --list | head -n1 && \
-    echo "=================================================================" && \
-    echo "ALL TOOLS READY: Roary, Snippy, VFDB, Prokka, MLST, Kaptive, etc." && \
-    echo "IMAGE READY FOR DOCKER HUB v1.0 - GO PUSH IT NOW!" && \
-    echo "================================================================="
+    panaroo --version && \
+    python3 -c "import ete3; print('ete3', ete3.__version__)" && \
+    seqkit version && \
+    iqtree2 --version && \
+    fastp --version 2>&1 | head -1 && \
+    abricate --version && \
+    echo "=== ALL DEPENDENCIES VERIFIED ==="
