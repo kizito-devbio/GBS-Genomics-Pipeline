@@ -4,7 +4,17 @@
  *
  * Input pathways:
  *   --curated_dir  Pre-assembled FASTA files (.fa, .fna, .fasta)
- *   --raw_dir      Paired-end FASTQ files (*_1.fastq, *_2.fastq)
+ --raw_dir      Paired-end FASTQ files
+
+Supported formats:
+    *.fastq
+    *.fastq.gz
+    *.fq
+    *.fq.gz
+
+Supported read naming:
+    *_1 / *_2
+    *_R1 / *_R2
  *
  * Raw-read pathway: QC → Assembly → Quality Assessment (no decontamination)
  * See modules/frozen/ for previously removed human decontamination modules.
@@ -96,21 +106,92 @@ workflow {
             .fromPath("${params.curated_dir}/*.{fa,fna,fasta}")
             .map { f -> [ f.baseName, f ] }
     } else {
-        // Raw pathway: QC → Assembly (decontamination removed — see modules/frozen/)
-        ch_raw_reads = Channel.fromFilePairs("${params.raw_dir}/*_{1,2}.fastq", flat: true)
-        qc_out       = QC(ch_raw_reads)
-        assembly_out = ASSEMBLY(qc_out.trimmed)
-        qa_out       = QUALITY_ASSESS(assembly_out.assembled)
 
-        ch_genomes = qa_out.metrics
-            .filter { meta, fasta, n50_file, total_len, contigs ->
-                n50_file.text.trim().toInteger() >= params.min_n50
-            }
-            .map { meta, fasta, n50, total_len, contigs -> [ meta, fasta ] }
-    }
+       // Raw pathway: QC → Assembly
+    //
+    // Supported paired-end naming conventions:
+    //
+    // sample_1.fastq
+    // sample_2.fastq
+    //
+    // sample_1.fastq.gz
+    // sample_2.fastq.gz
+    //
+    // sample_R1.fastq
+    // sample_R2.fastq
+    //
+    // sample_R1.fastq.gz
+    // sample_R2.fastq.gz
+    //
+    // sample_1.fq
+    // sample_2.fq
+    //
+    // sample_1.fq.gz
+    // sample_2.fq.gz
+    //
+    // sample_R1.fq
+    // sample_R2.fq
+    //
+    // sample_R1.fq.gz
+    // sample_R2.fq.gz
+
+    ch_raw_reads = Channel
+        .fromFilePairs("${params.raw_dir}/*_{1,2}.fastq", flat: true)
+        .mix(Channel.fromFilePairs("${params.raw_dir}/*_{1,2}.fastq.gz", flat: true))
+        .mix(Channel.fromFilePairs("${params.raw_dir}/*_R{1,2}.fastq", flat: true))
+        .mix(Channel.fromFilePairs("${params.raw_dir}/*_R{1,2}.fastq.gz", flat: true))
+        .mix(Channel.fromFilePairs("${params.raw_dir}/*_{1,2}.fq", flat: true))
+        .mix(Channel.fromFilePairs("${params.raw_dir}/*_{1,2}.fq.gz", flat: true))
+        .mix(Channel.fromFilePairs("${params.raw_dir}/*_R{1,2}.fq", flat: true))
+        .mix(Channel.fromFilePairs("${params.raw_dir}/*_R{1,2}.fq.gz", flat: true))
+        .ifEmpty {
+            error """
+            No paired-end FASTQ files were found in:
+
+              ${params.raw_dir}
+
+            Supported filename formats include:
+
+              sample_1.fastq
+              sample_2.fastq
+
+              sample_1.fastq.gz
+              sample_2.fastq.gz
+
+              sample_R1.fastq
+              sample_R2.fastq
+
+              sample_R1.fastq.gz
+              sample_R2.fastq.gz
+
+              sample_1.fq
+              sample_2.fq
+
+              sample_1.fq.gz
+              sample_2.fq.gz
+
+              sample_R1.fq
+              sample_R2.fq
+
+              sample_R1.fq.gz
+              sample_R2.fq.gz
+            """
+        }
+
+    qc_out       = QC(ch_raw_reads)
+    assembly_out = ASSEMBLY(qc_out.trimmed)
+    qa_out       = QUALITY_ASSESS(assembly_out.assembled)
+
+    ch_genomes = qa_out.metrics
+        .filter { meta, fasta, n50_file, total_len, contigs ->
+            n50_file.text.trim().toInteger() >= params.min_n50
+        }
+        .map { meta, fasta, n50, total_len, contigs -> [ meta, fasta ] }
+}
+
 
     // ── 3. Taxonomic confirmation ─────────────────────────────────
-    ch_tax_out = TAXONOMY(ch_genomes, blast_db_ch.blast_db.collect()).results
+   ch_tax_out = TAXONOMY(ch_genomes, blast_db_ch.blast_db).results
 
     // ── 4. Background genome selection ────────────────────────────
     BACKGROUND_SELECTION(ch_tax_out.map { it[1] }.collect())
@@ -143,14 +224,4 @@ workflow {
     )
 }
 
-workflow.onComplete {
-    def status = workflow.success ? 'SUCCESS' : 'FAILED'
-    log.info """
-    ╔══════════════════════════════════════════════════════════╗
-    ║  Pipeline finished: ${status}
-    ║  Results: ${params.outdir}
-    ║  Reports: ${params.outdir}/Reports/
-    ║  Figures: ${params.outdir}/Figures/
-    ╚══════════════════════════════════════════════════════════╝
-    """
-}
+

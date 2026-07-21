@@ -5,3 +5,4 @@ references/
 .nextflow.log*
 .conda_cache/
 data/
+raw_data/

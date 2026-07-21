@@ -6,32 +6,44 @@
  */
 
 process VIRULENCE_FACTOR {
-    tag { sample }
+
+    tag "$sample"
+
     label 'low_compute'
 
-    conda 'bioconda::abricate=1.0.1'
     container 'kizitodevbio/strepto-pipeline:latest'
 
-    publishDir "${params.outdir}/Virulence", mode: 'copy', pattern: "${sample}_vf.tsv"
-    publishDir "${params.outdir}/Logs", mode: 'copy', pattern: "${sample}_virulence.log"
+    publishDir "${params.outdir}/Virulence",
+        mode: 'copy',
+        pattern: "*_vf.tsv"
+
+    publishDir "${params.outdir}/Logs",
+        mode: 'copy',
+        pattern: "*_virulence.log"
+
 
     input:
     tuple val(sample), path(fasta_file)
+
 
     output:
     tuple val(sample), path("${sample}_vf.tsv"), emit: results
     path "${sample}_virulence.log", emit: log
 
+
     script:
     """
     #!/usr/bin/env bash
     set -euo pipefail
+
     export LC_ALL=C
     export LANG=C
 
     LOG="${sample}_virulence.log"
+
     START=\$(date +%s)
     TS=\$(date +"%Y-%m-%d %H:%M:%S")
+
 
     {
         echo "========================================"
@@ -41,27 +53,49 @@ process VIRULENCE_FACTOR {
         echo "Input:       ${fasta_file}"
         echo "Output dir:  ${params.outdir}/Virulence"
         echo "Software:    Abricate \$(abricate --version 2>&1 | head -1)"
-        echo "Parameters:  database=vfdb"
+        echo "Database:    VFDB"
         echo "----------------------------------------"
+
     } > "\$LOG"
 
-    abricate --db vfdb "${fasta_file}" > "${sample}_vf.tsv" 2>> "\$LOG" || {
-        echo "WARNING: Abricate returned non-zero exit code" >> "\$LOG"
-        echo "#FILE\\tSEQUENCE\\tSTART\\tEND\\tGENE\\tCOVERAGE\\tCOVERAGE_MAP\\tGAPS\\t%COVERAGE\\t%IDENTITY\\tDATABASE\\tACCESSION\\tPRODUCT\\tRESISTANCE" > "${sample}_vf.tsv"
-    }
+
+
+    abricate \
+        --db vfdb \
+        "${fasta_file}" \
+        > "${sample}_vf.tsv" \
+        2>> "\$LOG" || true
+
+
 
     if [ ! -s "${sample}_vf.tsv" ]; then
-        echo "# No virulence factors detected" > "${sample}_vf.tsv"
+
+        echo -e "#FILE\\tSEQUENCE\\tSTART\\tEND\\tGENE\\tCOVERAGE\\tCOVERAGE_MAP\\tGAPS\\t%COVERAGE\\t%IDENTITY\\tDATABASE\\tACCESSION\\tPRODUCT" \
+        > "${sample}_vf.tsv"
+
+        echo "No virulence factors detected" >> "\$LOG"
+
+    else
+
+        NUM_VF=\$(grep -vc "^#" "${sample}_vf.tsv" || true)
+
+        echo "VF detected: \$NUM_VF" >> "\$LOG"
+
     fi
 
-    NUM_VF=\$(grep -vc "^#" "${sample}_vf.tsv" 2>/dev/null || echo 0)
-    echo "VF detected: \$NUM_VF" >> "\$LOG"
+
 
     ELAPSED=\$(( \$(date +%s) - START ))
-    echo "----------------------------------------" >> "\$LOG"
-    echo "Completed:   \$(date +"%Y-%m-%d %H:%M:%S")" >> "\$LOG"
-    echo "Elapsed:     \${ELAPSED}s" >> "\$LOG"
-    echo "Status:      SUCCESS" >> "\$LOG"
-    echo "========================================" >> "\$LOG"
+
+
+    {
+        echo "----------------------------------------"
+        echo "Completed:   \$(date +"%Y-%m-%d %H:%M:%S")"
+        echo "Elapsed:     \${ELAPSED}s"
+        echo "Status:      SUCCESS"
+        echo "========================================"
+
+    } >> "\$LOG"
+
     """
 }

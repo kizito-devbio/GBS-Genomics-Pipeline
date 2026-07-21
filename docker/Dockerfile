@@ -48,7 +48,7 @@ RUN set -ex && \
 # -----------------------------
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --upgrade pip && \
+RUN pip install --upgrade "pip>=26.0" && \
     pip install pandas numpy matplotlib seaborn biopython nextflow requests tqdm
 
 # -----------------------------
@@ -150,7 +150,7 @@ RUN set -ex && \
 ENV PATH="/opt/edirect:/opt/prokka-1.14.6/bin:/opt/abricate/bin:/usr/local/bin:$PATH"
 WORKDIR /workspace
 
-# --------------------------
+# -----------------------------
 # 12. Verification (Smoke Test)
 # -----------------------------
 RUN prokka --version && \
@@ -159,8 +159,6 @@ RUN prokka --version && \
     lofreq >/dev/null 2>&1 || true && \
     table2asn --help >/dev/null 2>&1 || true && \
     efetch -version || true
-
-
 
 
 # -----------------------------
@@ -200,11 +198,42 @@ RUN set -ex && \
     ln -s /opt/kaptive/kaptive.py /usr/local/bin/kaptive && \
     rm -rf /opt/kaptive/.git
 
-# QUAST, mash, ncbi-datasets-pylib (reliable pip packages)
+# QUAST (pip) — installed first since it builds cleanly
+#
+# NOTE: "mash" is intentionally NOT installed via pip here. The real
+# bioinformatics Mash tool (marbl/Mash) is distributed as a dependency-free
+# binary, not a pip package — the "mash" name on PyPI belongs to an
+# unrelated, unrelated-to-genomics project. Installing it would risk
+# shadowing the real Mash binary (installed correctly below in the
+# "Final Tool Fixes" section from the official GitHub release) because
+# /opt/venv/bin comes before /usr/local/bin in PATH.
 RUN pip install --no-cache-dir \
-    quast \
-    mash \
-    ncbi-datasets-pylib
+    quast
+
+# ncbi-datasets-pylib — FIXED INSTALL (build-constraint approach)
+#
+# BACKGROUND:
+# ncbi-datasets-pylib's build backend (packit -> pbr) needs "pkg_resources",
+# bundled inside setuptools. Recent setuptools releases (roughly v81+)
+# dropped pkg_resources by default, and pip's *isolated* build environment
+# always grabs the newest setuptools available regardless of what's in this
+# venv — so pinning setuptools here alone doesn't help the build step.
+#
+# WHY NOT --no-build-isolation:
+# Disabling build isolation causes a DIFFERENT failure: pbr can no longer
+# read the correct version from the package's bundled PKG-INFO file and
+# falls back to reporting version "0.0.0", which pip then rejects as a
+# mismatch against every version it tries (ERROR: Could not find a version
+# that satisfies the requirement). So that approach is avoided here.
+#
+# THE FIX:
+# Use pip's build-constraints feature (pip >= 26.0) to force ONLY the
+# isolated build environment to use an older setuptools that still ships
+# pkg_resources — without disabling isolation, so pbr still reads the
+# correct version from PKG-INFO as normal.
+RUN echo "setuptools<81" > /tmp/build-constraints.txt && \
+    pip install --no-cache-dir --build-constraint /tmp/build-constraints.txt ncbi-datasets-pylib && \
+    rm -f /tmp/build-constraints.txt
 
 # -----------------------------
 # 14. Optional Runtime Init Script (skeleton – for future DB tools)
@@ -286,9 +315,16 @@ RUN set -ex && \
 
 
 # -----------------------------
-# 20. Panaroo — pangenome / core genome (pinned)
 # -----------------------------
-RUN pip install --no-cache-dir panaroo==1.5.0
+# 20. Panaroo — pangenome / core genome (pinned, installed from GitHub)
+# -----------------------------
+#
+# NOTE: Panaroo is NOT published on PyPI — it's only distributed via
+# Bioconda or directly from its GitHub repo. The official docs install it
+# with `pip3 install git+https://github.com/gtonkinhill/panaroo`. We pin
+# to the v1.5.0 tag here to preserve the same version guarantee a PyPI
+# pin would normally give.
+RUN pip install --no-cache-dir "panaroo @ git+https://github.com/gtonkinhill/panaroo.git@v1.5.0"
 
 # -----------------------------
 # 21. ete3 — phylogenetic tree visualization (pinned)
@@ -310,15 +346,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends iqtree && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------
+# -----------------------------
 # 24. Final Verification
 # -----------------------------
 RUN set -e && \
     echo "=== GBS-Genomics-Pipeline — Dependency Verification ===" && \
+    pip install --no-cache-dir "biopython<1.80" && \
     spades.py --version && \
     unicycler --version && \
     prokka --version && \
     mlst --version && \
-    kaptive --help | head -n 1 && \
+    python3 $(find /opt/kaptive -name "kaptive.py" | head -n 1) --help | head -n 1 && \
     roary -w && \
     snippy --version && \
     panaroo --version && \
@@ -327,4 +365,68 @@ RUN set -e && \
     iqtree2 --version && \
     fastp --version 2>&1 | head -1 && \
     abricate --version && \
+    python3 -c "import ncbi.datasets; print('ncbi-datasets-pylib OK')" && \
+    quast.py --version && \
+    mash --version && \
     echo "=== ALL DEPENDENCIES VERIFIED ==="
+
+
+
+# -----------------------------
+# 42. Final Kaptive Fix
+# -----------------------------
+RUN pip install --no-cache-dir biopython==1.83 && \
+    pip install --no-cache-dir \
+    "kaptive @ git+https://github.com/klebgenomics/Kaptive.git" && \
+    kaptive --version
+
+
+    # -------------------------------------------------------
+# 43. Compatibility fix for Prokka bundled tbl2asn
+# Ubuntu 22.04 no longer ships libidn.so.11
+# -------------------------------------------------------
+RUN set -ex && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends wget dpkg && \
+    wget http://archive.ubuntu.com/ubuntu/pool/main/libi/libidn/libidn11_1.33-2.2ubuntu2_amd64.deb && \
+    dpkg -i libidn11_1.33-2.2ubuntu2_amd64.deb && \
+    rm libidn11_1.33-2.2ubuntu2_amd64.deb && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Verify that tbl2asn now has all required libraries
+RUN ldd /opt/prokka-1.14.6/binaries/linux/tbl2asn
+
+# -----------------------------
+# Final Fix: Install missing Prokka BioPerl HMMER3 parser
+# -----------------------------
+RUN cpanm --notest Bio::SearchIO::hmmer3 && \
+    perl -MBio::SearchIO::hmmer3 -e 'print "Bio::SearchIO::hmmer3 OK\n"'
+    
+    # -----------------------------
+# 44. Install Graphviz for Nextflow DAG and execution reports
+# -----------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    graphviz \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Verify Graphviz installation
+RUN dot -V
+
+# -----------------------------
+# 45. Final Phylogenetic Visualization Dependencies
+# -----------------------------
+
+RUN pip install --no-cache-dir \
+    ete3==3.1.3 \
+    pyqt5 \
+    lxml
+
+# Verify ETE3 availability inside container
+RUN python3 - <<'PY'
+import ete3
+print("ETE3 version:", ete3.__version__)
+from ete3 import Tree
+print("ETE3 Tree module OK")
+PY
