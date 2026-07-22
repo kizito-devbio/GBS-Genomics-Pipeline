@@ -30,7 +30,7 @@ Examples of unacceptable behavior:
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the project maintainers at kizitosylvester@gmail.com.
+reported to the project maintainers at kizitosylvesterali@gmail.com.
 
 All complaints will be reviewed and investigated promptly and fairly.
 
