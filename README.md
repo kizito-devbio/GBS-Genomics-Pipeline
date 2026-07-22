@@ -211,7 +211,6 @@ Full list in [docker/Dockerfile](docker/Dockerfile).
 
 - MLST clonal complex assignment depends on PubMLST scheme coverage.
 - Raw-read pathway quality depends on sequencing depth, read quality, and genome completeness.
-- Abricate databases (CARD, VFDB) must be set up in the container/environment.
 - Human decontamination is not performed in the active workflow (see `modules/frozen/`).
 
 ## Citation
