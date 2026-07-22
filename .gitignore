@@ -6,3 +6,16 @@ references/
 .conda_cache/
 data/
 raw_data/
+test_results/
+
+# Generated reports and logs
+*.html
+*.log
+*.trace
+*.timeline
+*.report
+
+# Generated figures
+*.png
+*.svg
+*.pdf
