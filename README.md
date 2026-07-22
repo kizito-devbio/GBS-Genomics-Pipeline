@@ -250,7 +250,8 @@ The project welcomes collaborations, scientific discussions, testing, feature re
 For collaboration inquiries, please contact:
 
 **Kizito Ibeojo Sylvester-Ali**  
-Email: `kizitosylvesterali@gmail.com`  
+
+Email: [kizitosylvesterali@gmail.com](mailto:kizitosylvesterali@gmail.com)
 GitHub: https://github.com/kizito-devbio
 
 Contributions, suggestions, and improvements are welcome through GitHub issues and pull requests.
