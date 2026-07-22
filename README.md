@@ -150,7 +150,7 @@ If required data are unavailable, a `Reports/<figure>_SKIPPED.txt` file explains
 | `--mlst_scheme` | `sagalactiae` | PubMLST scheme |
 | `--min_n50` | `10000` | Minimum N50 for assembly pass filter |
 | `--max_cpus` | auto | Maximum CPU cores |
-| `--max_memory` | `6 GB` | Maximum memory |
+| `--max_memory` | `6g` | Maximum memory |
 | `--help` | — | Print parameter reference |
 
 See [docs/PARAMETERS.md](docs/PARAMETERS.md) for the complete parameter reference.
