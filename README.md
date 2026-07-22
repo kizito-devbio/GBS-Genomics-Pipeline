@@ -88,11 +88,23 @@ nextflow run pipeline.nf -profile docker --curated_dir data/ --outdir results -r
 ```
 
 ## Input Formats
+GBS-Genomics-Pipeline supports both pre-assembled genomes and raw paired-end sequencing reads.
 
-| Pathway | Format | Naming convention |
-|---------|--------|-------------------|
-| Curated | FASTA (`.fa`, `.fna`, `.fasta`) | Any basename, e.g. `sample1.fasta` |
-| Raw | Paired-end FASTQ | `sample_1.fastq` + `sample_2.fastq` |
+| Pathway | Format                          | Supported naming conventions                   |
+| ------- | ------------------------------- | ---------------------------------------------- |
+| Curated | FASTA (`.fa`, `.fna`, `.fasta`) | Any valid FASTA basename, e.g. `sample1.fasta` |
+| Raw     | Paired-end FASTQ                | Supports multiple Illumina naming formats:     |
+|         |                                 | `sample_1.fastq` + `sample_2.fastq`            |
+|         |                                 | `sample_1.fastq.gz` + `sample_2.fastq.gz`      |
+|         |                                 | `sample_R1.fastq` + `sample_R2.fastq`          |
+|         |                                 | `sample_R1.fastq.gz` + `sample_R2.fastq.gz`    |
+|         |                                 | `sample_1.fq` + `sample_2.fq`                  |
+|         |                                 | `sample_1.fq.gz` + `sample_2.fq.gz`            |
+|         |                                 | `sample_R1.fq` + `sample_R2.fq`                |
+|         |                                 | `sample_R1.fq.gz` + `sample_R2.fq.gz`          |
+
+The raw-read pathway automatically detects supported paired-end FASTQ naming conventions and performs quality control, genome assembly, and downstream whole-genome analysis.
+
 
 ## Output Structure
 
@@ -191,11 +203,16 @@ Full list in [docker/Dockerfile](docker/Dockerfile).
 
 ## Known Limitations
 
-- Core genome and phylogeny require ≥2 samples
-- MLST clonal complex assignment depends on PubMLST scheme coverage
-- Raw-read pathway quality depends on input sequencing depth
-- Abricate databases (CARD, VFDB) must be set up in the container/environment
-- Human decontamination is not performed (see `modules/frozen/`)
+- Phylogenetic analysis requires sufficient numbers of genomes for reliable inference:
+  - 1 genome: phylogenetic tree generation is skipped.
+  - 2 genomes: phylogenetic tree generation is skipped.
+  - 3 genomes: phylogenetic tree is generated, but bootstrap support values are not available.
+  - ≥4 genomes: phylogenetic reconstruction is performed with bootstrap support.
+
+- MLST clonal complex assignment depends on PubMLST scheme coverage.
+- Raw-read pathway quality depends on sequencing depth, read quality, and genome completeness.
+- Abricate databases (CARD, VFDB) must be set up in the container/environment.
+- Human decontamination is not performed in the active workflow (see `modules/frozen/`).
 
 ## Citation
 
@@ -203,8 +220,8 @@ If you use this pipeline, please cite:
 
 ```bibtex
 @software{gbs_genomics_pipeline,
+  author  = {Sylvester-Ali, Kizito Ibeojo},
   title   = {GBS-Genomics-Pipeline: Streptococcus agalactiae Whole-Genome Analysis},
-  author  = {DevBio, Kizito},
   year    = {2026},
   url     = {https://github.com/kizito-devbio/GBS-Genomics-Pipeline}
 }
@@ -224,6 +241,16 @@ Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_C
 
 See [CHANGELOG.md](CHANGELOG.md).
 
-## Acknowledgements
+## Collaboration and Contact
 
-Built with [Nextflow](https://www.nextflow.io/), [nf-core](https://nf-co.re/) conventions, and the open-source bioinformatics community. Key tools by Seemann (Prokka, Abricate, MLST), Tonkin-Hill (Panaroo), and Minh (IQ-TREE).
+GBS-Genomics-Pipeline is developed and maintained by **Kizito Ibeojo Sylvester-Ali** for reproducible whole-genome analysis of *Streptococcus agalactiae*.
+
+The project welcomes collaborations, scientific discussions, testing, feature requests, and contributions from researchers, clinicians, and bioinformaticians interested in bacterial genomics, antimicrobial resistance surveillance, and pathogen genomics.
+
+For collaboration inquiries, please contact:
+
+**Kizito Ibeojo Sylvester-Ali**  
+Email: `kizitosylvesterali@gmail.com`  
+GitHub: https://github.com/kizito-devbio
+
+Contributions, suggestions, and improvements are welcome through GitHub issues and pull requests.
