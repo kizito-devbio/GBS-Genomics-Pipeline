@@ -4,9 +4,9 @@ title: "GBS-Genomics-Pipeline"
 version: 1.1.0
 date-released: 2026-07-20
 authors:
-  - family-names: DevBio
+  - family-names: Sylvester-Ali
     given-names: Kizito
-    email: kizitosylvester@gmail.com
+    email: kizitosylvesterali@gmail.com
 repository-code: "https://github.com/kizito-devbio/GBS-Genomics-Pipeline"
 url: "https://github.com/kizito-devbio/GBS-Genomics-Pipeline"
 license: MIT
